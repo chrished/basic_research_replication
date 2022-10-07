@@ -1,0 +1,58 @@
+SYS_ARCH = $(shell sh -c 'uname -m 2>/dev/null')
+SYS_OS = $(shell sh -c 'uname -s 2>/dev/null')
+
+ifeq ($(SYS_ARCH),i686)
+MEXSUFFIX = mexglx
+MEXARCH = glnx86
+CUTIL_ARCH = i386
+endif
+ifeq ($(SYS_ARCH),x86_64)
+MEXSUFFIX = mexa64
+MEXARCH = glnxa64
+CUTIL_ARCH = x86_64
+endif
+
+ifeq ($(SYS_OS),Darwin)
+export MATLAB = /Applications/MATLAB_R2017a.app
+else
+export MATLAB = /usr/local/MATLAB
+endif
+
+CUDAHOME    = /usr/local/cuda
+CUTILDIR    = /home/doug/CUDA/NVIDIA_GPU_Computing_SDK/C
+NVMEX       = ./nvmex
+MEXINCL     = -I${CUDAHOME}/include -I${MATLAB}/extern/include -I${CUTILDIR}/common/inc
+MEXLIB      = -L${CUDAHOME}/lib -L${MATLAB}/extern/lib ${MATLAB}/sys/os/${MEXARCH}/libstdc++.so.6 ${CUTILDIR}/lib/libcutil_${CUTIL_ARCH}.a -lcudart -lcublas
+MEXFLAGS    = -fPIC -O3 -msse2
+CWD         = $(shell pwd)
+NVOPTS      = $(CWD)/nvopts.sh
+
+MEX = mex
+CC = gcc-4.4
+CXX = g++-4.4
+CXXFLAGS = -ansi -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -fPIC -pthread
+CXXOPTIMFLAGS = -O3
+LDOPTIMFLAGS = -O3
+LDFLAGS = -pthread -shared -Wl,--version-script,${MATLAB}/extern/lib/$(MEXARCH)/mexFunction.map -Wl,--no-undefined ${MATLAB}/sys/os/$(MEXARCH)/libstdc++.so.6
+LIBS = -lm
+INCLUDE = -I$(MATLABHOME)/extern/include
+MEXFLAGS = -cxx -v CC="$(CC)" CXX="$(CXX)" CXXFLAGS="$(CXXFLAGS)" CXXOPTIMFLAGS="$(CXXOPTIMFLAGS)" LDFLAGS="$(LDFLAGS)" LDOPTIMFLAGS="$(LDOPTIMFLAGS)"
+
+all: eigsim.${MEXSUFFIX} firmsim_cu.${MEXSUFFIX} firmsim_cpp.${MEXSUFFIX}
+
+firmsim_cu.${MEXSUFFIX}: firmsim.cu
+	$(NVMEX) -f $(NVOPTS) firmsim.cu $(MEXINCL) $(MEXLIB) -o firmsim_cu.${MEXSUFFIX}
+
+firmsim_cpp.${MEXSUFFIX}: firmsim.cpp
+	$(MEX) $(MEXFLAGS) $(LIBS) firmsim.cpp -output firmsim_cpp.${MEXSUFFIX}
+
+.SUFFIXES: .cu .${MEXSUFFIX}
+
+.cu.${MEXSUFFIX}:
+	$(NVMEX) -f $(NVOPTS) $< $(MEXINCL) $(MEXLIB)
+
+clean:
+	rm -f eigsim.${MEXSUFFIX}
+	rm -f firmsim_cu.${MEXSUFFIX}
+	rm -f firmsim_cpp.${MEXSUFFIX}
+
